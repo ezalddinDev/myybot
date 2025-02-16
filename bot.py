@@ -1,42 +1,59 @@
-import requests
 import telebot
+import instaloader
+import os
 
-bot = telebot.TeleBot("5464450219:AAFXSLhDKPgK-mnvkpSXSacm1zMi3JckcVE")
+TOKEN = "5464450219:AAFXSLhDKPgK-mnvkpSXSacm1zMi3JckcVE"
+bot = telebot.TeleBot(TOKEN)
 
 
-@bot.message_handler(commands=["start"])
+L = instaloader.Instaloader()
+
+@bot.message_handler(commands=['start'])
 def start(message):
-    bot.reply_to(message, f"اهلا بيك ({message.from_user.first_name}) في بوت التحميل من الانستكرام ارسل رابط الفديو ")
-
-@bot.message_handler(commands=['id','ايدي'])
-def id(message):
     name = message.from_user.first_name
-    user = message.from_user.username
-    di = message.from_user.id
-    bio = bot.get_chat(message.from_user.id).bio
-    bot.reply_to(message,f'NMAE>> {name}\nUSER>> @{user}\nID>> {di}\nBIO>> {bio}')
-
-url = "https://instagram-scraper-2022.p.rapidapi.com/ig/post_info/"
-@bot.message_handler(func= lambda m : True)
-def reels(m):
-    if "https://" in m.text:
-        bot.reply_to(m,"Please wait for the video to load")
-        sr = str(m.text).split("reel/")[1].split("/?")[0]
-        querystring = {"shortcode": f'{sr}'}
-        headers = {
-	"X-RapidAPI-Key": "9dfd75e054msh243174963922ac0p167fd0jsn00a695f35ccb",
-	"X-RapidAPI-Host": "instagram-scraper-2022.p.rapidapi.com"
-}
-        res = requests.request("GET", url, headers=headers, params=querystring)
-        jso = res.json()
-        iof = ''
-    if "video_url" in jso:
-        iof = jso['video_url']
-        bot.send_video(m.chat.id,iof,)
+    bot.reply_to(message,f"مرحبا بك ({name}) في بوت التحميل من الانستقرام")
 
 
+def extract_reel_id(url):
+    try:
+        return url.split("/reel/")[1].split("/")[0]
+    except IndexError:
+        return None
+
+
+@bot.message_handler(func=lambda message: "instagram.com/reel/" in message.text)
+def download_reel(message):
+    url = message.text
+    reel_id = extract_reel_id(url)
+
+    if not reel_id:
+        bot.reply_to(message, "❌ رابط غير صالح، يرجى إرسال رابط صحيح لـ Reels.")
+        return
+
+    bot.reply_to(message, "⏳ جاري تحميل الريلز، انتظر لحظات...")
+
+    try:
+        post = instaloader.Post.from_shortcode(L.context, reel_id)
+        L.download_post(post, target="reels")
+
+        for file in os.listdir("reels"):
+            if file.endswith(".mp4"):
+                video_path = os.path.join("reels", file)
+                
+                
+                with open(video_path, "rb") as video:
+                    bot.send_video(message.chat.id, video)
+
+                # delet video
+                os.remove(video_path)
+                os.rmdir("reels")
+                break
+
+    except Exception as e:
+        bot.reply_to(message, f"")
 
 
 
 
-bot.infinity_polling()
+# تشغيل البوت
+bot.polling(none_stop=True)
